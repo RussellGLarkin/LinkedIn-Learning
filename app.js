@@ -1,17 +1,10 @@
-const speedInput = document.getElementById('speed');
-const speedValue = document.getElementById('speed-value');
+import { parseLyrics, keyAction, describe, createPlayer } from './player.js';
 
-// The slider runs Slow → Fast, but we store a delay, so invert it:
-// with min 0.5 and max 5, slider value v gives a delay of (5.5 - v) seconds.
-function delayFromSlider() {
-  const min = Number(speedInput.min);
-  const max = Number(speedInput.max);
-  return (min + max - Number(speedInput.value)) * 1000;
-}
-
-let delayMs = delayFromSlider();
+const DEFAULT_SECONDS = 2;
 
 const lineEl = document.getElementById('line');
+const prevLineEl = document.getElementById('prev-line');
+const nextLineEl = document.getElementById('next-line');
 const lineNumberEl = document.getElementById('line-number');
 const counterEl = document.getElementById('counter');
 const progressEl = document.querySelector('.progress');
@@ -19,103 +12,78 @@ const progressFill = document.getElementById('progress-fill');
 const prevBtn = document.getElementById('prev');
 const nextBtn = document.getElementById('next');
 const playBtn = document.getElementById('play');
+const playIcon = document.getElementById('play-icon');
+const pauseIcon = document.getElementById('pause-icon');
+const speedButtons = document.querySelectorAll('.segmented button');
 
-let lines = [];
-let index = 0;
-let timer = null;
-
-function render() {
-  const total = lines.length;
-  const pct = ((index + 1) / total) * 100;
-
-  lineEl.textContent = lines[index];
-  lineEl.classList.remove('fade-in');
-  void lineEl.offsetWidth; // restart the fade animation
-  lineEl.classList.add('fade-in');
-
-  lineNumberEl.textContent = `LINE ${String(index + 1).padStart(2, '0')}`;
-  counterEl.textContent = `Line ${index + 1} of ${total}`;
-  progressFill.style.width = `${pct}%`;
-  progressEl.setAttribute('aria-valuenow', Math.round(pct));
-
-  prevBtn.disabled = index === 0;
-  nextBtn.disabled = index === total - 1;
-  playBtn.textContent = timer ? '❚❚ Pause' : '▶ Play';
+function showSpeed(seconds) {
+  speedButtons.forEach(btn => {
+    btn.setAttribute('aria-pressed', String(Number(btn.dataset.seconds) === seconds));
+  });
 }
 
-function stop() {
-  clearInterval(timer);
-  timer = null;
-}
+function start(lines) {
+  let shownIndex = -1;
 
-function play() {
-  // Restart from the top if we're already on the last line.
-  if (index === lines.length - 1) index = 0;
-  timer = setInterval(() => {
-    if (index < lines.length - 1) index++;
-    if (index === lines.length - 1) stop();
-    render();
-  }, delayMs);
-}
+  function render({ index, playing }) {
+    const view = describe(lines, index, playing);
 
-function updateSpeed() {
-  delayMs = delayFromSlider();
-  const seconds = (delayMs / 1000).toFixed(1);
-  speedValue.textContent = `${seconds} s / line`;
-  speedInput.setAttribute('aria-valuetext', `${seconds} seconds per line`);
-  // Apply the new speed immediately if we're playing.
-  if (timer) {
-    stop();
-    play();
+    // Only re-run the fade when the line actually changes (not on play/pause).
+    if (index !== shownIndex) {
+      lineEl.textContent = view.current;
+      lineEl.classList.remove('fade-in');
+      void lineEl.offsetWidth; // restart the fade animation
+      lineEl.classList.add('fade-in');
+      shownIndex = index;
+    }
+
+    prevLineEl.textContent = view.previous;
+    nextLineEl.textContent = view.next;
+    lineNumberEl.textContent = view.lineNumber;
+    counterEl.textContent = view.counter;
+    progressFill.style.width = `${view.percent}%`;
+    progressEl.setAttribute('aria-valuenow', Math.round(view.percent));
+
+    prevBtn.disabled = view.atStart;
+    nextBtn.disabled = view.atEnd;
+    playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    // SVG elements have no `hidden` property, so toggle the attribute (styled in styles.css).
+    playIcon.toggleAttribute('hidden', playing);
+    pauseIcon.toggleAttribute('hidden', !playing);
   }
+
+  const player = createPlayer(lines, { delayMs: DEFAULT_SECONDS * 1000, onChange: render });
+
+  prevBtn.addEventListener('click', player.prev);
+  nextBtn.addEventListener('click', player.next);
+  playBtn.addEventListener('click', player.toggle);
+  speedButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const seconds = Number(btn.dataset.seconds);
+      player.setDelay(seconds * 1000);
+      showSpeed(seconds);
+    });
+  });
+
+  document.addEventListener('keydown', e => {
+    const action = keyAction(e);
+    if (!action) return;
+    // preventDefault stops page scroll and stops a focused button from also firing.
+    e.preventDefault();
+    if (action === 'toggle' && !e.repeat) player.toggle();
+    if (action === 'next') player.next();
+    if (action === 'prev') player.prev();
+  });
+  // Some browsers activate a focused button on Space keyup; block that so Space toggles only once.
+  document.addEventListener('keyup', e => {
+    if (e.key === ' ') e.preventDefault();
+  });
+
+  playBtn.disabled = false;
+  render(player.state);
 }
 
-speedInput.addEventListener('input', updateSpeed);
-updateSpeed();
-
-function togglePlay() {
-  timer ? stop() : play();
-  render();
-}
-
-function go(delta) {
-  const target = index + delta;
-  if (target < 0 || target >= lines.length) return;
-  stop();
-  index = target;
-  render();
-}
-
-prevBtn.addEventListener('click', () => go(-1));
-nextBtn.addEventListener('click', () => go(1));
-playBtn.addEventListener('click', togglePlay);
-
-document.addEventListener('keydown', e => {
-  if (!lines.length || e.metaKey || e.ctrlKey || e.altKey) return;
-  // Let the speed slider keep its own arrow-key handling when it has focus.
-  if (e.target === speedInput && e.key.startsWith('Arrow')) return;
-  switch (e.key) {
-    case ' ':
-      // preventDefault stops page scroll and stops a focused button from also firing.
-      e.preventDefault();
-      if (!e.repeat) togglePlay();
-      break;
-    case 'ArrowRight':
-    case 'ArrowDown':
-      e.preventDefault();
-      go(1);
-      break;
-    case 'ArrowLeft':
-    case 'ArrowUp':
-      e.preventDefault();
-      go(-1);
-      break;
-  }
-});
-// Some browsers activate a focused button on Space keyup; block that so Space toggles only once.
-document.addEventListener('keyup', e => {
-  if (e.key === ' ') e.preventDefault();
-});
+showSpeed(DEFAULT_SECONDS);
 
 fetch('lyrics.txt')
   .then(res => {
@@ -123,13 +91,12 @@ fetch('lyrics.txt')
     return res.text();
   })
   .then(text => {
-    lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const lines = parseLyrics(text);
     if (lines.length === 0) {
       lineEl.textContent = 'lyrics.txt is empty.';
       return;
     }
-    playBtn.disabled = false;
-    render();
+    start(lines);
   })
   .catch(err => {
     lineEl.textContent = 'Could not load lyrics.txt — serve this folder over HTTP (e.g. python3 -m http.server).';
