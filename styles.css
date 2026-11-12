@@ -6,7 +6,7 @@
   --text: #f2f2f5;
   --text-strong: #ffffff;
   --muted: #8b8d98;
-  --context: #6f717c;
+  --context: #7c7e89; /* 4.75:1 on --bg, just above WCAG AA 4.5:1 */
   --segment-text: #c5c7d0;
   --accent: #f5a524;
   --accent-hover: #ffb83f;
@@ -257,7 +257,7 @@ button:focus-visible {
 
 .segmented button {
   min-width: 44px;
-  height: 36px;
+  height: 44px; /* minimum comfortable tap target */
   border: none;
   border-radius: 8px;
   background: transparent;

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 const FIRST = "Shall I compare thee to a summer's day?";
 const SECOND = 'Thou art more lovely and more temperate:';
@@ -21,6 +22,7 @@ function ui(page) {
     play: page.locator('#play'),
     speed: seconds => page.getByRole('button', { name: new RegExp(`^${seconds} seconds? per line$`) }),
     keyHints: page.locator('.keys'),
+    speedButtons: page.locator('.segmented button'),
   };
 }
 
@@ -51,9 +53,22 @@ async function clickNext(page, n) {
 const START = new Date('2026-01-01T12:00:00Z');
 
 test.beforeEach(async ({ page }) => {
+  // Block Google Fonts so the tests don't need the network and layout doesn't
+  // shift when a font arrives late. The page falls back to system fonts.
+  await page.route(/fonts\.(googleapis|gstatic)\.com/, route => route.abort());
   // Fake timers so 2-second playback steps run instantly and deterministically.
   await page.clock.install({ time: START });
 });
+
+/** Expect every speed button to be enabled or disabled. */
+async function expectSpeedButtons(page, enabled) {
+  const buttons = ui(page).speedButtons;
+  await expect(buttons).toHaveCount(4);
+  for (const button of await buttons.all()) {
+    if (enabled) await expect(button).toBeEnabled();
+    else await expect(button).toBeDisabled();
+  }
+}
 
 /**
  * Load a page, then pause the fake clock so time only moves when a test calls
@@ -104,6 +119,43 @@ test.describe('loading', () => {
     await expect(u.play).toBeDisabled();
     await expect(u.prev).toBeDisabled();
     await expect(u.next).toBeDisabled();
+    await expectSpeedButtons(page, false);
+    await expect(u.lineNumber).toHaveText('');
+    await expect(u.counter).toHaveText('');
+    await expect(u.progress).not.toHaveAttribute('aria-valuenow');
+  });
+
+  test('explains how to fix it when the network request fails', async ({ page }) => {
+    await page.route('**/lyrics.txt', route => route.abort('failed'));
+    await open(page);
+    const u = ui(page);
+
+    await expect(u.line).toContainText('Could not load lyrics.txt');
+    await expect(u.play).toBeDisabled();
+    await expectSpeedButtons(page, false);
+  });
+
+  test('shows a loading message with controls disabled until the lyrics arrive', async ({ page }) => {
+    let release;
+    const arrived = new Promise(resolve => { release = resolve; });
+    await page.route('**/lyrics.txt', async route => {
+      await arrived;
+      await route.fulfill({ body: 'First\nSecond', contentType: 'text/plain' });
+    });
+    await open(page);
+    const u = ui(page);
+
+    await expect(u.line).toHaveText('Loading lyrics…');
+    await expect(u.play).toBeDisabled();
+    await expect(u.prev).toBeDisabled();
+    await expect(u.next).toBeDisabled();
+    await expectSpeedButtons(page, false);
+    await expect(u.counter).toHaveText('');
+
+    release();
+    await expect(u.line).toHaveText('First');
+    await expect(u.play).toBeEnabled();
+    await expectSpeedButtons(page, true);
   });
 
   test('says so when lyrics.txt is empty', async ({ page }) => {
@@ -443,6 +495,59 @@ test.describe('keyboard shortcuts', () => {
     await expect(u.line).toHaveText(FIRST);
   });
 
+  test('holding Space down toggles only once', async ({ page }) => {
+    await open(page);
+    await expect(ui(page).line).toHaveText(FIRST);
+
+    // One press plus one auto-repeat (event.repeat = true). An even count matters:
+    // without the repeat guard it would toggle on then off and end up paused.
+    await page.keyboard.down('Space');
+    await page.keyboard.down('Space');
+    await page.keyboard.up('Space');
+
+    await expectPlaying(page);
+  });
+
+  test('Space on a focused speed button plays instead of changing speed', async ({ page }) => {
+    await open(page);
+    const u = ui(page);
+    await expect(u.line).toHaveText(FIRST);
+
+    await u.speed(4).focus();
+    await page.keyboard.press('Space');
+
+    await expectPlaying(page);
+    await expect(u.speed(2)).toHaveAttribute('aria-pressed', 'true');
+    await expect(u.speed(4)).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  test('Enter on a focused speed button chooses that speed', async ({ page }) => {
+    await open(page);
+    const u = ui(page);
+    await expect(u.line).toHaveText(FIRST);
+
+    await u.speed(4).focus();
+    await page.keyboard.press('Enter');
+
+    await expect(u.speed(4)).toHaveAttribute('aria-pressed', 'true');
+    await expect(u.speed(2)).toHaveAttribute('aria-pressed', 'false');
+    await expectPaused(page);
+  });
+
+  test('Enter on focused Play and Next buttons activates them', async ({ page }) => {
+    await open(page);
+    const u = ui(page);
+    await expect(u.line).toHaveText(FIRST);
+
+    await u.next.focus();
+    await page.keyboard.press('Enter');
+    await expect(u.line).toHaveText(SECOND);
+
+    await u.play.focus();
+    await page.keyboard.press('Enter');
+    await expectPlaying(page);
+  });
+
   test('Tab reaches the controls in order', async ({ page, isMobile }) => {
     // Phones have no Tab key, and Safari/WebKit skips buttons on Tab by default.
     test.skip(isMobile, 'desktop keyboards only');
@@ -487,24 +592,98 @@ test.describe('layout', () => {
     }
   });
 
-  test('keyboard hints show on desktop and hide on phones', async ({ page, isMobile }) => {
+  test('keyboard hints show above 700px wide and hide at 700px or less', async ({ page }) => {
+    // Matches the max-width: 700px rule in styles.css, whatever the device.
     await open(page);
-    if (isMobile) {
-      await expect(ui(page).keyHints).toBeHidden();
-    } else {
-      await expect(ui(page).keyHints).toBeVisible();
-    }
+    await expect(ui(page).line).toHaveText(FIRST);
+
+    await page.setViewportSize({ width: 701, height: 800 });
+    await expect(ui(page).keyHints).toBeVisible();
+    await page.setViewportSize({ width: 700, height: 800 });
+    await expect(ui(page).keyHints).toBeHidden();
   });
 
-  test('buttons are large enough to tap', async ({ page }) => {
+  test('buttons are at least 44px in each direction for easy tapping', async ({ page }) => {
     await open(page);
     const u = ui(page);
     await expect(u.line).toHaveText(FIRST);
 
-    for (const control of [u.prev, u.play, u.next, u.speed(1)]) {
+    for (const control of [u.prev, u.play, u.next, u.speed(1), u.speed(2), u.speed(3), u.speed(4)]) {
       const box = await control.boundingBox();
-      expect(box.width).toBeGreaterThanOrEqual(36);
-      expect(box.height).toBeGreaterThanOrEqual(36);
+      expect(box.width, await control.getAttribute('aria-label')).toBeGreaterThanOrEqual(44);
+      expect(box.height, await control.getAttribute('aria-label')).toBeGreaterThanOrEqual(44);
     }
+  });
+});
+
+test.describe('animation', () => {
+  test('the line fades in when it changes, but not on Play or Pause', async ({ page }) => {
+    await open(page);
+    const u = ui(page);
+    await expect(u.line).toHaveText(FIRST);
+    await expect(u.line).toHaveClass(/fade-in/);
+
+    // Clear the class so we can see whether anything re-adds it.
+    await u.line.evaluate(el => el.classList.remove('fade-in'));
+    await u.play.click();
+    await expectPlaying(page);
+    await u.play.click();
+    await expectPaused(page);
+    await expect(u.line).not.toHaveClass(/fade-in/);
+
+    await u.next.click();
+    await expect(u.line).toHaveClass(/fade-in/);
+  });
+
+  test('the fade runs by default', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await open(page);
+    await expect(ui(page).line).toHaveText(FIRST);
+
+    await expect(ui(page).line).toHaveCSS('animation-name', 'fade');
+  });
+
+  test('the fade and progress transition are off with reduced motion', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await open(page);
+    await expect(ui(page).line).toHaveText(FIRST);
+
+    await expect(ui(page).line).toHaveCSS('animation-name', 'none');
+    await expect(page.locator('#progress-fill')).toHaveCSS('transition-property', 'none');
+  });
+});
+
+test.describe('accessibility', () => {
+  /** Run axe against WCAG 2.1 A and AA and fail with a readable list of problems. */
+  async function expectNoViolations(page) {
+    // axe schedules its own timers, so let the paused fake clock run again.
+    await page.clock.resume();
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze();
+    const problems = results.violations.map(v => `${v.id}: ${v.help} → ${v.nodes.map(n => n.target.join(' ')).join(', ')}`);
+    expect(problems).toEqual([]);
+  }
+
+  test('no WCAG A/AA problems on the first line', async ({ page }) => {
+    await open(page);
+    await expect(ui(page).line).toHaveText(FIRST);
+    await expectNoViolations(page);
+  });
+
+  test('no WCAG A/AA problems mid-song while playing', async ({ page }) => {
+    await open(page);
+    const u = ui(page);
+    await clickNext(page, 4);
+    await u.play.click();
+    await expectPlaying(page);
+    await expectNoViolations(page);
+  });
+
+  test('no WCAG A/AA problems on the error screen', async ({ page }) => {
+    await useLyrics(page, 'Not found', 404);
+    await open(page);
+    await expect(ui(page).line).toContainText('Could not load lyrics.txt');
+    await expectNoViolations(page);
   });
 });

@@ -43,6 +43,15 @@ export function describe(lines, index, playing = false) {
   };
 }
 
+/** Largest delay timers handle correctly; bigger values fire after ~1 ms in browsers and Node. */
+export const MAX_DELAY_MS = 2 ** 31 - 1;
+
+function checkDelay(ms) {
+  if (!Number.isInteger(ms) || ms < 1 || ms > MAX_DELAY_MS) {
+    throw new RangeError(`delay must be a whole number of milliseconds from 1 to ${MAX_DELAY_MS}`);
+  }
+}
+
 /**
  * Create a player over `lines`.
  *
@@ -57,6 +66,7 @@ export function createPlayer(lines, { delayMs = 2000, onChange = () => {} } = {}
   if (!Array.isArray(lines) || lines.length === 0) {
     throw new Error('createPlayer needs at least one line');
   }
+  checkDelay(delayMs);
 
   let index = 0;
   let delay = delayMs;
@@ -67,17 +77,21 @@ export function createPlayer(lines, { delayMs = 2000, onChange = () => {} } = {}
   const notify = () => onChange(state());
 
   function clearTimer() {
-    clearInterval(timer);
+    clearTimeout(timer);
     timer = null;
   }
 
+  // Each step schedules the next one with setTimeout, so reaching the last
+  // line simply stops scheduling; there is no repeating timer to cancel.
+  function step() {
+    if (index < last) index++;
+    timer = index < last ? setTimeout(step, delay) : null;
+    notify();
+  }
+
   function startTimer() {
-    clearInterval(timer);
-    timer = setInterval(() => {
-      if (index < last) index++;
-      if (index === last) clearTimer();
-      notify();
-    }, delay);
+    clearTimeout(timer);
+    timer = setTimeout(step, delay);
   }
 
   function goTo(target) {
@@ -110,7 +124,7 @@ export function createPlayer(lines, { delayMs = 2000, onChange = () => {} } = {}
     pause,
     toggle: () => (timer !== null ? pause() : play()),
     setDelay(ms) {
-      if (!(ms > 0)) throw new RangeError('delay must be a positive number of milliseconds');
+      checkDelay(ms);
       delay = ms;
       if (timer !== null) startTimer();
       notify();
