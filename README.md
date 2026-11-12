@@ -41,13 +41,14 @@ There are two test suites:
 | Command | What it runs |
 | --- | --- |
 | `npm test` | Unit tests for the player logic, using Node's built-in test runner (Node 20.4+) |
+| `npm run test:coverage` | The unit tests plus a line/branch/function coverage table for `player.js` |
 | `npm run test:ui` | Playwright UI tests in Chrome, Firefox, Android and iOS |
 | `npm run test:all` | Both |
 | `npm run test:ui:report` | Opens the HTML report from the last UI test run |
 
 ### Unit tests (`test/`)
 
-They cover the player logic in `player.js`: parsing `lyrics.txt`, the keyboard shortcut mapping, the line number, counter and progress values, and playback (moving between lines, auto-advance, stopping on the last line, restarting from the top, pausing, and changing speed mid-playback). Timers are mocked, so the suite runs in well under a second.
+They cover the player logic in `player.js`: parsing `lyrics.txt`, the keyboard shortcut mapping, the line number, counter and progress values, playback (moving between lines, auto-advance, stopping on the last line, restarting from the top, pausing, and changing speed mid-playback), rejecting invalid input, and the change notifications the page relies on to redraw. `player.js` is at 100% line, branch and function coverage. Timers are mocked, so the suite runs in well under a second.
 
 ### UI tests (`e2e/`)
 
@@ -62,7 +63,16 @@ The Playwright tests drive the real page in four browsers:
 
 The phones are emulated in desktop browsers, which is close to the real devices but not identical.
 
-The tests cover loading (including a missing file, an empty file, blank lines, a one-line song and HTML in the lyrics), the Previous/Next buttons, playback, the speed buttons, keyboard shortcuts and layout (no sideways scrolling, controls on screen, tap-target size). Playwright's fake clock replaces real waiting, so playback tests check exact timings without slowing the suite down.
+The tests cover:
+
+- **Loading:** the loading message, a missing file, a network failure, an empty file, blank lines, a one-line song and HTML in the lyrics. Controls stay disabled until the lyrics arrive.
+- **Previous/Next, playback and speed:** every readout, exact playback timings, and changing speed mid-playback.
+- **Keyboard:** Space and arrows, holding Space down, Space and Enter on focused buttons, modifier keys, and Tab order.
+- **Layout:** no sideways scrolling, controls on screen, 44px tap targets, and keyboard hints hidden at 700px wide or less.
+- **Animation:** the fade runs only when the line changes, and is off with the reduced-motion setting.
+- **Accessibility:** an [axe](https://github.com/dequelabs/axe-core) scan for WCAG 2.1 A and AA problems, including colour contrast, on the first line, mid-song while playing, and on the error screen.
+
+Playwright's fake clock replaces real waiting, so playback tests check exact timings without slowing the suite down. Google Fonts requests are blocked during the tests, so they don't need the network and the page uses system fonts.
 
 First-time setup:
 

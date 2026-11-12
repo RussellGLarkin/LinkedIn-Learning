@@ -1,7 +1,7 @@
 import { describe as suite, test, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { parseLyrics, keyAction, describe, createPlayer } from '../player.js';
+import { parseLyrics, keyAction, describe, createPlayer, MAX_DELAY_MS } from '../player.js';
 
 const LINES = ['one', 'two', 'three', 'four'];
 
@@ -110,7 +110,7 @@ suite('createPlayer', () => {
   let player;
 
   beforeEach(() => {
-    mock.timers.enable({ apis: ['setInterval'] });
+    mock.timers.enable({ apis: ['setTimeout'] });
   });
 
   afterEach(() => {
@@ -121,6 +121,18 @@ suite('createPlayer', () => {
 
   test('rejects an empty song', () => {
     assert.throws(() => createPlayer([]), /at least one line/);
+  });
+
+  test('rejects lyrics that are not a list', () => {
+    for (const bad of ['abc', null, undefined, { length: 2 }]) {
+      assert.throws(() => createPlayer(bad), /at least one line/, `createPlayer(${JSON.stringify(bad)})`);
+    }
+  });
+
+  test('rejects an invalid starting delay', () => {
+    for (const bad of [0, -1, 1.5, NaN, Infinity, MAX_DELAY_MS + 1, '2000']) {
+      assert.throws(() => createPlayer(LINES, { delayMs: bad }), RangeError, `delayMs: ${bad}`);
+    }
   });
 
   test('starts on the first line, paused, at 2 seconds per line', () => {
@@ -189,7 +201,8 @@ suite('createPlayer', () => {
     test('stops on the last line', () => {
       player = createPlayer(LINES);
       player.play();
-      mock.timers.tick(2000 * 3);
+      // One step per tick: Node 20 mock timers skip timeouts scheduled during a tick.
+      for (let step = 0; step < 3; step++) mock.timers.tick(2000);
       assert.deepEqual(player.state, { index: 3, playing: false, delayMs: 2000 });
 
       mock.timers.tick(10_000);
@@ -289,12 +302,125 @@ suite('createPlayer', () => {
       assert.equal(player.state.index, 2, 'keeps the 1 s pace');
     });
 
-    test('setDelay rejects zero, negative and non-numeric delays', () => {
+    test('setDelay rejects zero, negative, fractional, non-numeric and too-large delays', () => {
       player = createPlayer(LINES);
-      for (const bad of [0, -1000, NaN, 'fast']) {
+      for (const bad of [0, -1000, 1.5, NaN, 'fast', '2000', Infinity, MAX_DELAY_MS + 1]) {
         assert.throws(() => player.setDelay(bad), RangeError, `setDelay(${bad})`);
       }
       assert.equal(player.state.delayMs, 2000);
+    });
+
+    test('setDelay accepts the smallest and largest valid delays', () => {
+      player = createPlayer(LINES);
+      player.setDelay(1);
+      assert.equal(player.state.delayMs, 1);
+      player.setDelay(MAX_DELAY_MS);
+      assert.equal(player.state.delayMs, MAX_DELAY_MS);
+    });
+
+    test('a rejected delay leaves playback running at the old speed', () => {
+      player = createPlayer(LINES);
+      player.play();
+      assert.throws(() => player.setDelay(Infinity), RangeError);
+      mock.timers.tick(2000);
+      assert.deepEqual(player.state, { index: 1, playing: true, delayMs: 2000 });
+    });
+  });
+
+  suite('change notifications', () => {
+    // The page redraws only when onChange fires, so each change must notify exactly once.
+    function setup() {
+      const onChange = mock.fn();
+      player = createPlayer(LINES, { onChange });
+      const calls = () => onChange.mock.calls.map(c => c.arguments[0]);
+      return { onChange, calls };
+    }
+
+    test('nothing is reported on creation', () => {
+      const { onChange } = setup();
+      assert.equal(onChange.mock.callCount(), 0);
+    });
+
+    test('play reports that playback started', () => {
+      const { calls } = setup();
+      player.play();
+      assert.deepEqual(calls(), [{ index: 0, playing: true, delayMs: 2000 }]);
+    });
+
+    test('play from the last line reports the restart at the first line', () => {
+      const { onChange, calls } = setup();
+      player.goTo(3);
+      onChange.mock.resetCalls();
+      player.play();
+      assert.deepEqual(calls(), [{ index: 0, playing: true, delayMs: 2000 }]);
+    });
+
+    test('pause reports that playback stopped', () => {
+      const { onChange, calls } = setup();
+      player.play();
+      onChange.mock.resetCalls();
+      player.pause();
+      assert.deepEqual(calls(), [{ index: 0, playing: false, delayMs: 2000 }]);
+    });
+
+    test('pause while already paused reports nothing', () => {
+      const { onChange } = setup();
+      player.pause();
+      assert.equal(onChange.mock.callCount(), 0);
+    });
+
+    test('play while already playing reports nothing', () => {
+      const { onChange } = setup();
+      player.play();
+      onChange.mock.resetCalls();
+      player.play();
+      assert.equal(onChange.mock.callCount(), 0);
+    });
+
+    test('each playback step reports the new line', () => {
+      const { onChange, calls } = setup();
+      player.play();
+      onChange.mock.resetCalls();
+      mock.timers.tick(2000);
+      mock.timers.tick(2000);
+      assert.deepEqual(calls(), [
+        { index: 1, playing: true, delayMs: 2000 },
+        { index: 2, playing: true, delayMs: 2000 },
+      ]);
+    });
+
+    test('the final step reports the last line and that playback stopped, once', () => {
+      const { onChange, calls } = setup();
+      player.goTo(2);
+      player.play();
+      onChange.mock.resetCalls();
+      mock.timers.tick(10_000);
+      assert.deepEqual(calls(), [{ index: 3, playing: false, delayMs: 2000 }]);
+    });
+
+    test('setDelay reports the new delay, paused or playing', () => {
+      const { onChange, calls } = setup();
+      player.setDelay(3000);
+      assert.deepEqual(calls(), [{ index: 0, playing: false, delayMs: 3000 }]);
+
+      player.play();
+      onChange.mock.resetCalls();
+      player.setDelay(1000);
+      assert.deepEqual(calls(), [{ index: 0, playing: true, delayMs: 1000 }]);
+    });
+
+    test('a rejected delay reports nothing', () => {
+      const { onChange } = setup();
+      assert.throws(() => player.setDelay(0), RangeError);
+      assert.equal(onChange.mock.callCount(), 0);
+    });
+
+    test('moving during playback reports the new line and the stop together', () => {
+      const { onChange, calls } = setup();
+      player.play();
+      onChange.mock.resetCalls();
+      player.next();
+      assert.deepEqual(calls(), [{ index: 1, playing: false, delayMs: 2000 }]);
     });
   });
 

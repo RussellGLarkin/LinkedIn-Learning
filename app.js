@@ -80,6 +80,8 @@ function start(lines) {
   });
 
   playBtn.disabled = false;
+  // Speed buttons start disabled in the markup so they don't look usable before the lyrics load.
+  speedButtons.forEach(btn => { btn.disabled = false; });
   render(player.state);
 }
 
