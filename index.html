@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lyrics Display</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="card">
+    <div class="header">
+      <span>Lyrics</span>
+      <span id="counter"></span>
+    </div>
+    <div class="progress" role="progressbar" aria-label="Song progress" aria-valuemin="0" aria-valuemax="100">
+      <div id="progress-fill"></div>
+    </div>
+
+    <div class="stage">
+      <div id="line-number"></div>
+      <div id="line" aria-live="polite">Loading lyrics…</div>
+    </div>
+
+    <div class="controls">
+      <button id="prev" disabled>← Previous</button>
+      <button id="play" disabled>▶ Play</button>
+      <button id="next" disabled>Next →</button>
+    </div>
+
+    <div class="hints">
+      <kbd>Space</kbd> play / pause &nbsp;·&nbsp; <kbd>←</kbd> <kbd>→</kbd> previous / next
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
