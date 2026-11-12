@@ -1,4 +1,15 @@
-const PLAY_DELAY_MS = 2000;
+const speedInput = document.getElementById('speed');
+const speedValue = document.getElementById('speed-value');
+
+// The slider runs Slow → Fast, but we store a delay, so invert it:
+// with min 0.5 and max 5, slider value v gives a delay of (5.5 - v) seconds.
+function delayFromSlider() {
+  const min = Number(speedInput.min);
+  const max = Number(speedInput.max);
+  return (min + max - Number(speedInput.value)) * 1000;
+}
+
+let delayMs = delayFromSlider();
 
 const lineEl = document.getElementById('line');
 const lineNumberEl = document.getElementById('line-number');
@@ -44,8 +55,23 @@ function play() {
     if (index < lines.length - 1) index++;
     if (index === lines.length - 1) stop();
     render();
-  }, PLAY_DELAY_MS);
+  }, delayMs);
 }
+
+function updateSpeed() {
+  delayMs = delayFromSlider();
+  const seconds = (delayMs / 1000).toFixed(1);
+  speedValue.textContent = `${seconds} s / line`;
+  speedInput.setAttribute('aria-valuetext', `${seconds} seconds per line`);
+  // Apply the new speed immediately if we're playing.
+  if (timer) {
+    stop();
+    play();
+  }
+}
+
+speedInput.addEventListener('input', updateSpeed);
+updateSpeed();
 
 function togglePlay() {
   timer ? stop() : play();
@@ -66,6 +92,8 @@ playBtn.addEventListener('click', togglePlay);
 
 document.addEventListener('keydown', e => {
   if (!lines.length || e.metaKey || e.ctrlKey || e.altKey) return;
+  // Let the speed slider keep its own arrow-key handling when it has focus.
+  if (e.target === speedInput && e.key.startsWith('Arrow')) return;
   switch (e.key) {
     case ' ':
       // preventDefault stops page scroll and stops a focused button from also firing.

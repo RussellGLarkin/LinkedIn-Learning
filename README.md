@@ -1,6 +1,6 @@
 # Lyrics Display
 
-A small web app that shows song lyrics one line at a time. You can step through the lines by hand or let it play automatically, advancing every 2 seconds.
+A small web app that shows song lyrics one line at a time. You can step through the lines by hand or let it play automatically, advancing at a speed you choose.
 
 It's plain HTML, CSS and JavaScript, with no build step and no dependencies.
 
@@ -9,7 +9,8 @@ It's plain HTML, CSS and JavaScript, with no build step and no dependencies.
 - Shows one line at a time, with its line number and a "Line 5 of 14" counter
 - A progress bar showing how far through the song you are
 - **Previous** and **Next** buttons, greyed out at the first and last line
-- A **Play** button that advances every 2 seconds and switches to **Pause** while playing
+- A **Play** button that advances automatically and switches to **Pause** while playing
+- A **Speed** slider that sets the playback speed from 5 seconds per line (slow) to 0.5 seconds per line (fast), 2 seconds by default. Changes apply immediately, even mid-playback
 - Keyboard shortcuts:
 
   | Key | Action |
@@ -50,4 +51,5 @@ Replace the contents of `lyrics.txt` with your song, one line per line of the fi
 
 - When playback reaches the last line, it stops. Pressing Play again starts over from the first line.
 - Pressing Previous or Next (or an arrow key) during playback pauses it, so the timer doesn't skip past the line you chose.
-- To change the playback speed, edit `PLAY_DELAY_MS` at the top of `app.js`.
+- When the speed slider has focus, the arrow keys adjust the slider instead of changing lines.
+- To change the slider's range or default speed, edit the `min`, `max`, `step` and `value` attributes on the `#speed` input in `index.html`. The slider is inverted (right is faster), so the default delay in seconds is `min + max - value`.
