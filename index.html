@@ -4,42 +4,69 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lyrics Display</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main class="card">
-    <div class="header">
-      <span>Lyrics</span>
-      <span id="counter"></span>
-    </div>
-    <div class="progress" role="progressbar" aria-label="Song progress" aria-valuemin="0" aria-valuemax="100">
-      <div id="progress-fill"></div>
-    </div>
+  <div class="stage">
+    <header class="top">
+      <div class="now-playing">
+        <div class="badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+        </div>
+        <div>
+          <div class="muted small">Now playing</div>
+          <div class="title">Lyrics</div>
+        </div>
+      </div>
+      <div id="line-number" class="line-number"></div>
+    </header>
 
-    <div class="stage">
-      <div id="line-number"></div>
-      <div id="line" aria-live="polite">Loading lyrics…</div>
-    </div>
+    <main class="lines">
+      <p id="prev-line" class="context-line" aria-hidden="true"></p>
+      <p id="line" class="current-line" aria-live="polite">Loading lyrics…</p>
+      <p id="next-line" class="context-line" aria-hidden="true"></p>
+    </main>
 
-    <div class="controls">
-      <button id="prev" disabled>← Previous</button>
-      <button id="play" disabled>▶ Play</button>
-      <button id="next" disabled>Next →</button>
-    </div>
+    <footer class="transport">
+      <div class="progress" role="progressbar" aria-label="Song progress" aria-valuemin="0" aria-valuemax="100">
+        <div id="progress-fill"></div>
+      </div>
 
-    <div class="speed">
-      <label for="speed">Speed</label>
-      <span class="speed-end">Slow</span>
-      <input type="range" id="speed" min="0.5" max="5" step="0.5" value="3.5">
-      <span class="speed-end">Fast</span>
-      <output id="speed-value" for="speed">2.0 s / line</output>
-    </div>
+      <div class="transport-row">
+        <div class="side hints muted small">
+          <span id="counter"></span>
+          <span class="keys"><kbd>Space</kbd> play / pause · <kbd>←</kbd> <kbd>→</kbd> previous / next</span>
+        </div>
 
-    <div class="hints">
-      <kbd>Space</kbd> play / pause &nbsp;·&nbsp; <kbd>←</kbd> <kbd>→</kbd> previous / next
-    </div>
-  </main>
+        <div class="buttons">
+          <button id="prev" class="round-btn" aria-label="Previous line" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <button id="play" class="play-btn" aria-label="Play" disabled>
+            <svg id="play-icon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="7 4 20 12 7 20 7 4"></polygon></svg>
+            <svg id="pause-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>
+          </button>
+          <button id="next" class="round-btn" aria-label="Next line" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+        </div>
 
-  <script src="app.js"></script>
+        <div class="side speed">
+          <span class="muted small" id="speed-label">Speed</span>
+          <div class="segmented" role="group" aria-labelledby="speed-label">
+            <button type="button" data-seconds="1" aria-label="1 second per line">1s</button>
+            <button type="button" data-seconds="2" aria-label="2 seconds per line">2s</button>
+            <button type="button" data-seconds="3" aria-label="3 seconds per line">3s</button>
+            <button type="button" data-seconds="4" aria-label="4 seconds per line">4s</button>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script type="module" src="app.js"></script>
 </body>
 </html>

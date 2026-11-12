@@ -1,0 +1,18 @@
+{
+  "name": "lyrics-display",
+  "private": true,
+  "type": "module",
+  "description": "Shows song lyrics one line at a time with Previous, Next and Play controls.",
+  "scripts": {
+    "test": "node --test",
+    "test:ui": "playwright test",
+    "test:ui:report": "playwright show-report",
+    "test:all": "npm test && npm run test:ui"
+  },
+  "engines": {
+    "node": ">=20.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0"
+  }
+}
