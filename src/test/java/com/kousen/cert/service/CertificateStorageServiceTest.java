@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CertificateStorageServiceTest {
 
@@ -24,6 +25,28 @@ class CertificateStorageServiceTest {
         storageService = new CertificateStorageService(tempDir.toString());
     }
     
+    @Test
+    void shouldRefuseToServeFilesOutsideStorageDirectory() throws IOException {
+        Path storage = Files.createDirectory(tempDir.resolve("certs"));
+        Path secret = Files.writeString(tempDir.resolve("secret.pdf"), "not a certificate");
+        CertificateStorageService service = new CertificateStorageService(storage.toString());
+
+        assertThat(secret).exists();
+        assertThatThrownBy(() -> service.getCertificate("../secret.pdf"))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("Certificate not found");
+        assertThatThrownBy(() -> service.getCertificate(secret.toString()))
+                .as("absolute paths must not escape either")
+                .isInstanceOf(IOException.class);
+    }
+
+    @Test
+    void shouldThrowWhenCertificateDoesNotExist() {
+        assertThatThrownBy(() -> storageService.getCertificate("missing.pdf"))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("missing.pdf");
+    }
+
     @Test
     void shouldStoreAndRetrieveCertificate() throws IOException {
         // Given

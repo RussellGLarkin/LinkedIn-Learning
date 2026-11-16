@@ -131,8 +131,10 @@ public class CertificateStorageService {
      * @throws IOException if the file can't be found
      */
     public Path getCertificate(String filename) throws IOException {
-        Path certificatePath = storagePath.resolve(filename);
-        if (!Files.exists(certificatePath)) {
+        Path root = storagePath.toAbsolutePath().normalize();
+        Path certificatePath = root.resolve(filename).normalize();
+        // Reject traversal ("../x") and absolute paths that would escape the storage directory
+        if (!certificatePath.startsWith(root) || certificatePath.equals(root) || !Files.exists(certificatePath)) {
             throw new IOException("Certificate not found: " + filename);
         }
         return certificatePath;
