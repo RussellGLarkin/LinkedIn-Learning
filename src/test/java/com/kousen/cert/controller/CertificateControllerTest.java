@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -104,6 +106,33 @@ class CertificateControllerTest {
                 .andExpect(jsonPath("$.errors.bookTitle").exists());
     }
     
+    @Test
+    void shouldRejectBlankPurchaserName() throws Exception {
+        mockMvc.perform(post("/api/certificates")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"purchaserName": "  ", "bookTitle": "Kotlin Cookbook"}
+                        """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Validation Error"))
+                .andExpect(jsonPath("$.errors.purchaserName").value("Purchaser name is required"));
+
+        verify(pdfService, never()).createPdf(any());
+    }
+
+    @Test
+    void shouldRejectMalformedEmail() throws Exception {
+        mockMvc.perform(post("/api/certificates")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"purchaserName": "Ada", "bookTitle": "Kotlin Cookbook", "purchaserEmail": "not-an-email"}
+                        """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.*").value(org.hamcrest.Matchers.hasItem("Invalid email format")));
+
+        verify(pdfService, never()).createPdf(any());
+    }
+
     @Test
     void shouldReturnAvailableBooks() throws Exception {
         mockMvc.perform(get("/api/certificates/books"))
