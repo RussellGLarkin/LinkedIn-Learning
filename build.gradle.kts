@@ -73,6 +73,14 @@ tasks.test {
     }
 }
 
+// Classes excluded from coverage, shared by the report and the verification gate
+val coverageExcludes = listOf(
+    "**/Application.class",
+    "**/FontTester.class",  // dev-only @Profile("fonttest") runner
+    "**/config/**",
+    "**/model/**",
+)
+
 tasks.jacocoTestReport {
     dependsOn(tasks.test)
 
@@ -81,32 +89,38 @@ tasks.jacocoTestReport {
         csv.required.set(true)
         html.outputLocation.set(layout.buildDirectory.dir("jacocoHtml"))
     }
-    
-    // Exclude certain classes from analysis
+
     classDirectories.setFrom(
-        files(classDirectories.files.map {
-            fileTree(it) {
-                exclude("**/Application.class")
-                exclude("**/FontTester.class")  // dev-only @Profile("fonttest") runner
-                exclude("**/config/**") 
-                exclude("**/model/**")
-            }
-        })
+        files(classDirectories.files.map { fileTree(it) { exclude(coverageExcludes) } })
     )
 }
 
 tasks.jacocoTestCoverageVerification {
+    dependsOn(tasks.test)
+
+    classDirectories.setFrom(
+        files(classDirectories.files.map { fileTree(it) { exclude(coverageExcludes) } })
+    )
+
     violationRules {
+        // Whole project: lines and branches
         rule {
             limit {
-                minimum = "0.60".toBigDecimal()
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.75".toBigDecimal()
+            }
+            limit {
+                counter = "BRANCH"
+                value = "COVEREDRATIO"
+                minimum = "0.65".toBigDecimal()
             }
         }
 
+        // Every core service and controller class individually
         rule {
-            enabled = true
             element = "CLASS"
-            includes = listOf("com.kousen.cert.service.*")
+            includes = listOf("com.kousen.cert.service.*", "com.kousen.cert.controller.*")
 
             limit {
                 counter = "LINE"
@@ -115,4 +129,10 @@ tasks.jacocoTestCoverageVerification {
             }
         }
     }
+}
+
+// Fail `./gradlew check` (and therefore `build`) when coverage drops below the rules above.
+// Note: the full suite includes a Testcontainers/PostgreSQL test, so Docker must be running.
+tasks.check {
+    dependsOn(tasks.jacocoTestCoverageVerification)
 }
