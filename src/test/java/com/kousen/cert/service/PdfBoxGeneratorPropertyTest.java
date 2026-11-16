@@ -97,9 +97,9 @@ class PdfBoxGeneratorPropertyTest {
         // Arrange
         String title = "Certificate of Ownership";
         String subtitle = "Test Book";
-        
-        // Act
-        Path pdfPath = generator.createCertificatePdf(title, name, subtitle, null);
+
+        // Act (uses the in-memory QR method that PdfService calls in production)
+        Path pdfPath = generator.createCertificatePdfWithQrData(title, name, subtitle, null);
         
         try {
             // Assert
