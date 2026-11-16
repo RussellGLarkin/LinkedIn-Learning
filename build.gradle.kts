@@ -87,6 +87,7 @@ tasks.jacocoTestReport {
         files(classDirectories.files.map {
             fileTree(it) {
                 exclude("**/Application.class")
+                exclude("**/FontTester.class")  // dev-only @Profile("fonttest") runner
                 exclude("**/config/**") 
                 exclude("**/model/**")
             }
