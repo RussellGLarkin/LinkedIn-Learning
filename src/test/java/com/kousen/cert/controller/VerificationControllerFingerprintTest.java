@@ -1,9 +1,9 @@
 package com.kousen.cert.controller;
 
+import com.kousen.cert.service.KeyStoreProvider;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
-import java.io.InputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyStore;
 import java.security.MessageDigest;
@@ -12,11 +12,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class VerificationControllerFingerprintTest {
 
-    private static final Path TEST_KEYSTORE = Path.of("src/test/resources/keystores/test_keystore.p12");
+    // Keystores are gitignored (*.p12), so generate one rather than relying on a committed file
+    @TempDir
+    Path tempDir;
 
     @Test
     void shouldReturnColonSeparatedSha256OfSigningCertificate() throws Exception {
-        KeyStore ks = loadTestKeystore();
+        KeyStore ks = new KeyStoreProvider(tempDir.resolve("test.p12")).keyStore();
 
         // Independently computed expected value
         byte[] digest = MessageDigest.getInstance("SHA-256")
@@ -49,13 +51,5 @@ class VerificationControllerFingerprintTest {
         KeyStore uninitialized = KeyStore.getInstance("PKCS12");  // never loaded -> KeyStoreException
 
         assertThat(VerificationController.fingerprintOf(uninitialized)).isEqualTo(VerificationController.ERROR);
-    }
-
-    private static KeyStore loadTestKeystore() throws Exception {
-        KeyStore ks = KeyStore.getInstance("PKCS12");
-        try (InputStream in = Files.newInputStream(TEST_KEYSTORE)) {
-            ks.load(in, "changeit".toCharArray());
-        }
-        return ks;
     }
 }

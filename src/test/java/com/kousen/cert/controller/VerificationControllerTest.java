@@ -27,7 +27,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * using the real test keystore so the fingerprint logic actually runs.
  */
 @WebMvcTest(VerificationController.class)
-@TestPropertySource(properties = "certificate.keystore=src/test/resources/keystores/test_keystore.p12")
+// KeyStoreProvider creates this keystore if it is missing (*.p12 files are gitignored)
+@TestPropertySource(properties = "certificate.keystore=${java.io.tmpdir}/verification-test-keystore.p12")
 class VerificationControllerTest {
 
     private static final String SHA256_FINGERPRINT = "^([0-9A-F]{2}:){31}[0-9A-F]{2}$";
