@@ -1,0 +1,25 @@
+# Generate Certificate
+### Generate a new certificate and store it in the archive
+POST http://localhost:8080/api/certificates
+Content-Type: application/json
+Accept: application/pdf
+
+{
+  "purchaserName": "Margaret Eldridge",
+  "bookTitle": "Mockito Made Clear",
+  "purchaserEmail": "margaret.eldridge@pragprog.org"
+}
+
+### List available book titles
+GET http://localhost:8080/api/certificates/books
+
+### List all stored certificates
+GET http://localhost:8080/api/certificates/stored
+
+### Get a specific stored certificate
+# Replace filename with an actual certificate filename from the list endpoint
+GET http://localhost:8080/api/certificates/stored/ada_lovelace_modern_java_recipes_20250418123045.pdf
+
+###
+GET http://certificate-service.kousenit.com/api/certificates/stored
+
