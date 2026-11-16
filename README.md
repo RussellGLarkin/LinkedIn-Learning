@@ -416,8 +416,9 @@ Returns JSON data for programmatic access to analytics.
 
 ### Prerequisites
 
-- Java 21 or higher
-- Gradle 8.5 or higher
+- Java 21 (if it isn't installed, Gradle downloads it automatically via the foojay toolchain resolver)
+- The Gradle wrapper (`./gradlew`) — no separate Gradle install needed
+- Docker, running, for the full test suite: `AnalyticsIntegrationTest` starts PostgreSQL via Testcontainers
 
 ### Database Configuration
 
@@ -477,6 +478,18 @@ This project uses both traditional unit tests and property-based testing:
    ```
 
 Property-based testing systematically tests properties of the application with many random inputs, helping to discover edge cases that traditional unit tests might miss.
+
+#### Coverage gate
+
+`./gradlew check` (and therefore `./gradlew build`) runs a JaCoCo coverage gate and fails if coverage drops below:
+
+| Scope | Minimum |
+|---|---|
+| Whole project, lines | 75% |
+| Whole project, branches | 65% |
+| Each class in `service` and `controller`, lines | 70% |
+
+`config`, `model`, `Application` and the dev-only `FontTester` are excluded. The HTML report is at `build/jacocoHtml/index.html`. Because the gate measures the whole suite, Docker must be running (see Prerequisites).
 
 4. Generate a certificate (example using curl)
    ```bash
